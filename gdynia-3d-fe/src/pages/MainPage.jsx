@@ -20,23 +20,30 @@ export default function MainPage() {
   const [objects, setObjects] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [form, setForm] = useState(emptyForm);
-  const [newObjectId, setNewObjectId] = useState('');
+
+  // Stan dla nowego obiektu (wszystkie pola)
+  const [newObject, setNewObject] = useState({
+    id: '',
+    titlePl: '',
+    titleEn: '',
+    descriptionPl: '',
+    descriptionEn: '',
+    isActive: true,
+    scale: 1.0
+  });
+
   const [modelFile, setModelFile] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
+  // --------------------- Pobieranie danych ---------------------
   const fetchObjects = async (keepSelection = true) => {
     try {
       setLoading(true);
-
       const response = await fetch(`${backendUrl}/ojects`);
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Nie udało się pobrać listy obiektów');
-      }
-
+      if (!response.ok) throw new Error(data.error || 'Nie udało się pobrać listy obiektów');
       setObjects(data);
 
       if (data.length === 0) {
@@ -49,13 +56,9 @@ export default function MainPage() {
         keepSelection && data.some((item) => item.id === selectedId)
           ? selectedId
           : data[0].id;
-
       setSelectedId(nextSelectedId);
-
       const selectedObject = data.find((item) => item.id === nextSelectedId);
-      if (selectedObject) {
-        setForm(selectedObject);
-      }
+      if (selectedObject) setForm(selectedObject);
     } catch (error) {
       setMessage(error.message || 'Nie udało się pobrać obiektów.');
     } finally {
@@ -66,14 +69,9 @@ export default function MainPage() {
   const fetchSingleObject = async (id) => {
     try {
       setLoading(true);
-
       const response = await fetch(`${backendUrl}/object/${encodeURIComponent(id)}`);
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Nie udało się pobrać obiektu');
-      }
-
+      if (!response.ok) throw new Error(data.error || 'Nie udało się pobrać obiektu');
       setForm(data);
       setSelectedId(data.id);
     } catch (error) {
@@ -87,9 +85,9 @@ export default function MainPage() {
     fetchObjects(false);
   }, []);
 
+  // --------------------- Obsługa zmian w formularzu edycji ---------------------
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-
     setForm((prev) => ({
       ...prev,
       [name]:
@@ -101,15 +99,41 @@ export default function MainPage() {
     }));
   };
 
+  // --------------------- Obsługa zmian w formularzu nowego obiektu ---------------------
+  const handleNewChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setNewObject((prev) => ({
+      ...prev,
+      [name]:
+        type === 'checkbox'
+          ? checked
+          : name === 'scale'
+          ? Number(value)
+          : value
+    }));
+  };
+
+  // --------------------- Wybór obiektu z listy ---------------------
   const handleSelectObject = async (id) => {
     setSelectedId(id);
     await fetchSingleObject(id);
   };
 
+  // --------------------- Tworzenie nowego obiektu (z pełną walidacją) ---------------------
   const createObject = async () => {
     try {
-      if (!newObjectId.trim()) {
-        setMessage('Podaj ID nowego obiektu.');
+      // Walidacja po stronie frontendu
+      if (!newObject.id.trim()) {
+        setMessage('ID jest wymagane.');
+        return;
+      }
+      if (
+        !newObject.titlePl.trim() ||
+        !newObject.titleEn.trim() ||
+        !newObject.descriptionPl.trim() ||
+        !newObject.descriptionEn.trim()
+      ) {
+        setMessage('Wszystkie tytuły i opisy są wymagane.');
         return;
       }
 
@@ -118,20 +142,25 @@ export default function MainPage() {
 
       const response = await fetch(`${backendUrl}/object`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ id: newObjectId.trim() })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newObject)
       });
 
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Nie udało się utworzyć obiektu');
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Nie udało się utworzyć obiektu');
-      }
-
-      setNewObjectId('');
       setMessage('Obiekt utworzony.');
+      // Resetowanie formularza nowego obiektu
+      setNewObject({
+        id: '',
+        titlePl: '',
+        titleEn: '',
+        descriptionPl: '',
+        descriptionEn: '',
+        isActive: true,
+        scale: 1.0
+      });
+      // Odświeżenie listy i wybranie nowego obiektu
       await fetchObjects(false);
       await fetchSingleObject(data.object.id);
     } catch (error) {
@@ -141,29 +170,24 @@ export default function MainPage() {
     }
   };
 
+  // --------------------- Zapisz zmiany w obiekcie ---------------------
   const saveObject = async () => {
     try {
       if (!selectedId) {
         setMessage('Najpierw wybierz obiekt.');
         return;
       }
-
       setLoading(true);
       setMessage('');
 
       const response = await fetch(`${backendUrl}/object/${encodeURIComponent(selectedId)}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Nie udało się zapisać obiektu');
-      }
+      if (!response.ok) throw new Error(data.error || 'Nie udało się zapisać obiektu');
 
       setForm(data);
       setMessage('Obiekt zapisany.');
@@ -175,15 +199,14 @@ export default function MainPage() {
     }
   };
 
+  // --------------------- Usuwanie obiektu ---------------------
   const deleteObject = async () => {
     try {
       if (!selectedId) {
         setMessage('Najpierw wybierz obiekt.');
         return;
       }
-
-      const confirmed = window.confirm(`Na pewno usunąć obiekt "${selectedId}"?`);
-      if (!confirmed) return;
+      if (!window.confirm(`Na pewno usunąć obiekt "${selectedId}"?`)) return;
 
       setLoading(true);
       setMessage('');
@@ -191,12 +214,8 @@ export default function MainPage() {
       const response = await fetch(`${backendUrl}/object/${encodeURIComponent(selectedId)}`, {
         method: 'DELETE'
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Nie udało się usunąć obiektu');
-      }
+      if (!response.ok) throw new Error(data.error || 'Nie udało się usunąć obiektu');
 
       setMessage('Obiekt usunięty.');
       await fetchObjects(false);
@@ -207,34 +226,28 @@ export default function MainPage() {
     }
   };
 
+  // --------------------- Zmiana ID / nazwy katalogu ---------------------
   const renameObject = async () => {
     try {
       if (!selectedId) {
         setMessage('Najpierw wybierz obiekt.');
         return;
       }
-
       if (!form.id.trim()) {
         setMessage('ID nie może być puste.');
         return;
       }
-
       setLoading(true);
       setMessage('');
 
       const response = await fetch(`${backendUrl}/object/${encodeURIComponent(selectedId)}/id`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: form.id.trim() })
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Nie udało się zmienić ID');
-      }
+      if (!response.ok) throw new Error(data.error || 'Nie udało się zmienić ID');
 
       setSelectedId(data.id);
       setForm(data);
@@ -248,18 +261,17 @@ export default function MainPage() {
     }
   };
 
+  // --------------------- Upload modelu ---------------------
   const uploadModel = async () => {
     try {
       if (!selectedId) {
         setMessage('Najpierw wybierz obiekt.');
         return;
       }
-
       if (!modelFile) {
         setMessage('Najpierw wybierz plik .glb');
         return;
       }
-
       setLoading(true);
       setMessage('');
 
@@ -272,14 +284,13 @@ export default function MainPage() {
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Nie udało się wgrać modelu');
-      }
+      if (!response.ok) throw new Error(data.error || 'Nie udało się wgrać modelu');
 
       setForm(data.metadata);
       setModelFile(null);
       setMessage('Model wgrany poprawnie.');
+      // Odśwież dane obiektu, aby zaktualizować metadane
+      await fetchSingleObject(selectedId);
       await fetchObjects(true);
     } catch (error) {
       setMessage(error.message || 'Nie udało się wgrać modelu.');
@@ -288,18 +299,17 @@ export default function MainPage() {
     }
   };
 
+  // --------------------- Upload preview ---------------------
   const uploadPreview = async () => {
     try {
       if (!selectedId) {
         setMessage('Najpierw wybierz obiekt.');
         return;
       }
-
       if (!previewFile) {
         setMessage('Najpierw wybierz plik .png');
         return;
       }
-
       setLoading(true);
       setMessage('');
 
@@ -312,16 +322,13 @@ export default function MainPage() {
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Nie udało się wgrać preview');
-      }
+      if (!response.ok) throw new Error(data.error || 'Nie udało się wgrać preview');
 
       setForm(data.metadata);
       setPreviewFile(null);
       setMessage('Preview wgrany poprawnie.');
-      await fetchObjects(true);
       await fetchSingleObject(selectedId);
+      await fetchObjects(true);
     } catch (error) {
       setMessage(error.message || 'Nie udało się wgrać preview.');
     } finally {
@@ -331,30 +338,98 @@ export default function MainPage() {
 
   const previewUrl = selectedId ? `${backendUrl}/object/${encodeURIComponent(selectedId)}/png` : '';
 
+  // --------------------- Render ---------------------
   return (
     <div className={styles.page}>
       <div className={styles.layout}>
         <aside className={styles.sidebar}>
           <h2 className={styles.sidebarTitle}>Lista obiektów</h2>
 
+          {/* Formularz tworzenia nowego obiektu – wszystkie pola wymagane */}
           <div className={styles.createBox}>
-            <input
-              type="text"
-              value={newObjectId}
-              onChange={(e) => setNewObjectId(e.target.value)}
-              placeholder="np. object-3"
-              className={styles.input}
-            />
-            <button className={styles.buttonPrimary} type="button" onClick={createObject}>
+            <label className={styles.field}>
+              <span>ID (nazwa katalogu)</span>
+              <input
+                className={styles.input}
+                name="id"
+                value={newObject.id}
+                onChange={handleNewChange}
+                type="text"
+                placeholder="np. object-3"
+              />
+            </label>
+            <label className={styles.field}>
+              <span>Tytuł PL</span>
+              <input
+                className={styles.input}
+                name="titlePl"
+                value={newObject.titlePl}
+                onChange={handleNewChange}
+                type="text"
+                placeholder="Tytuł po polsku"
+              />
+            </label>
+            <label className={styles.field}>
+              <span>Tytuł EN</span>
+              <input
+                className={styles.input}
+                name="titleEn"
+                value={newObject.titleEn}
+                onChange={handleNewChange}
+                type="text"
+                placeholder="Title in English"
+              />
+            </label>
+            <label className={styles.field}>
+              <span>Opis PL</span>
+              <textarea
+                className={styles.textarea}
+                name="descriptionPl"
+                value={newObject.descriptionPl}
+                onChange={handleNewChange}
+                rows="2"
+                placeholder="Opis po polsku"
+              />
+            </label>
+            <label className={styles.field}>
+              <span>Opis EN</span>
+              <textarea
+                className={styles.textarea}
+                name="descriptionEn"
+                value={newObject.descriptionEn}
+                onChange={handleNewChange}
+                rows="2"
+                placeholder="Description in English"
+              />
+            </label>
+            <label className={styles.checkboxRow}>
+              <input
+                name="isActive"
+                checked={newObject.isActive}
+                onChange={handleNewChange}
+                type="checkbox"
+              />
+              <span>isActive</span>
+            </label>
+            <div className={styles.field}>
+              <span>Scale: {Number(newObject.scale || 1).toFixed(1)}</span>
+              <input
+                name="scale"
+                value={newObject.scale}
+                onChange={handleNewChange}
+                type="range"
+                min="0.5"
+                max="2.0"
+                step="0.1"
+              />
+            </div>
+            <button className={styles.buttonPrimary} type="button" onClick={createObject} disabled={loading}>
               Dodaj obiekt
             </button>
           </div>
 
           <div className={styles.objectList}>
-            {objects.length === 0 && (
-              <div className={styles.emptyState}>Brak obiektów.</div>
-            )}
-
+            {objects.length === 0 && <div className={styles.emptyState}>Brak obiektów.</div>}
             {objects.map((object) => (
               <button
                 key={object.id}
@@ -380,7 +455,7 @@ export default function MainPage() {
 
             {!selectedId ? (
               <div className={styles.emptyStateLarge}>
-                Wybierz obiekt z listy albo utwórz nowy.
+                Wybierz obiekt z listy albo utwórz nowy (wypełniając wszystkie pola po lewej).
               </div>
             ) : (
               <>
