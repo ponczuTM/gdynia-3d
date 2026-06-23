@@ -1,0 +1,123 @@
+/* *, html, body{
+  filter: grayscale(100%);
+} */
+
+:root {
+  --page-bg: #ffffff;
+
+  --vt-old-duration: 220ms;
+  --vt-new-duration: 320ms;
+  --vt-group-duration: 320ms;
+
+  --vt-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --vt-ease-in: cubic-bezier(0.32, 0, 0.67, 0);
+  --vt-ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  background: var(--page-bg);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--page-bg);
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+  background: var(--page-bg);
+}
+
+.app-content {
+  position: relative;
+  min-height: 100vh;
+  background: var(--page-bg);
+}
+
+/* Włączenie transitions */
+@view-transition {
+  navigation: auto;
+}
+
+/* Delikatna kontrola grupy */
+::view-transition-group(root) {
+  animation-duration: var(--vt-group-duration);
+  animation-timing-function: var(--vt-ease-smooth);
+}
+
+/* Stary widok */
+::view-transition-old(root) {
+  animation:
+    page-old-out var(--vt-old-duration) var(--vt-ease-in) both;
+}
+
+/* Nowy widok */
+::view-transition-new(root) {
+  animation:
+    page-new-in var(--vt-new-duration) var(--vt-ease-smooth) both;
+}
+
+/* Stara strona:
+   minimalny ruch w lewo + lekkie wygaszenie */
+@keyframes page-old-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-18px, 0, 0) scale(0.995);
+  }
+}
+
+/* Nowa strona:
+   delikatny wjazd z prawej */
+@keyframes page-new-in {
+  from {
+    opacity: 0;
+    transform: translate3d(18px, 0, 0) scale(0.998);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* Lepsza szansa na płynny compositing */
+.app-shell,
+.app-content,
+::view-transition-old(root),
+::view-transition-new(root) {
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+
+  .app-shell,
+  .app-content,
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    will-change: auto;
+  }
+}

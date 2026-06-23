@@ -1,0 +1,144 @@
+.page {
+  min-height: 100vh;
+  background: #0f172a;
+  padding: 32px 16px;
+  color: #e2e8f0;
+  font-family: Arial, sans-serif;
+}
+
+.card {
+  max-width: 900px;
+  margin: 0 auto;
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: 32px;
+  color: #ffffff;
+}
+
+.subtitle {
+  margin: 0 0 20px;
+  color: #94a3b8;
+  word-break: break-all;
+}
+
+.message {
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 10px;
+  color: #f8fafc;
+}
+
+.grid {
+  display: grid;
+  gap: 18px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field span {
+  font-size: 14px;
+  color: #cbd5e1;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #475569;
+  color: #f8fafc;
+  border-radius: 10px;
+  padding: 12px 14px;
+  outline: none;
+}
+
+.field input:focus,
+.field textarea:focus {
+  border-color: #38bdf8;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f8fafc;
+}
+
+.checkboxRow input {
+  width: 18px;
+  height: 18px;
+}
+
+.fileBox {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  background: #0b1220;
+  border: 1px solid #334155;
+  border-radius: 12px;
+}
+
+.fileBox span {
+  color: #94a3b8;
+}
+
+.fileBox strong {
+  color: #ffffff;
+  word-break: break-all;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.button,
+.buttonPrimary,
+.buttonSecondary {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: 0.2s ease;
+}
+
+.button {
+  background: #2563eb;
+  color: white;
+}
+
+.button:hover {
+  background: #1d4ed8;
+}
+
+.buttonPrimary {
+  background: #22c55e;
+  color: white;
+}
+
+.buttonPrimary:hover {
+  background: #16a34a;
+}
+
+.buttonSecondary {
+  background: #475569;
+  color: white;
+}
+
+.buttonSecondary:hover {
+  background: #334155;
+}
