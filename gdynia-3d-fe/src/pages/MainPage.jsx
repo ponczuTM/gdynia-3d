@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import styles from './MainPage.module.css';
 
 export default function MainPage() {
-  const backendIP = '169.254.66.69';
+  const backendIP = '192.168.68.247';
   const backendUrl = useMemo(() => `http://${backendIP}:2115`, [backendIP]);
 
   const emptyForm = {
