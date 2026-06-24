@@ -1,3 +1,12 @@
+
+/*
+
+sudo curl -X POST http://localhost:2115/download-objects \
+  -H "Content-Type: application/json" \
+  -d '{"targetPath":"/Users/oliwermroczkowski/Downloads/objects-backup"}'
+
+*/
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -30,16 +39,7 @@ function getLocalIPs() {
 }
 
 function isReservedName(name) {
-  const reserved = [
-    'node_modules',
-    '.git',
-    '.vscode',
-    'dist',
-    'build',
-    'public',
-    'src',
-    'assets'
-  ];
+  const reserved = ['node_modules', '.git', '.vscode', 'dist', 'build', 'public', 'src', 'assets'];
   return reserved.includes(name);
 }
 
@@ -75,10 +75,8 @@ function findSingleFileByExt(dirPath, ext) {
 function getObjectSummary(id) {
   const objectDir = getObjectDir(id);
   const metadataPath = getMetadataPath(id);
-
   if (!fileExists(objectDir) || !fs.statSync(objectDir).isDirectory()) return null;
   if (!fileExists(metadataPath)) return null;
-
   const raw = fs.readFileSync(metadataPath, 'utf8');
   const metadata = JSON.parse(raw);
   return { ...metadata, id, folder: id };
@@ -120,7 +118,6 @@ function objectExists(id) {
 function removeOldFilesByExt(id, ext, keepName) {
   const dir = getObjectDir(id);
   const files = fs.readdirSync(dir);
-
   files.forEach((file) => {
     const fileExt = path.extname(file).toLowerCase();
     if (fileExt === ext && file !== keepName) {
@@ -151,17 +148,6 @@ function isValidTargetPath(targetPath) {
   return null;
 }
 
-function createTimestamp() {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mi = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}_${hh}-${mi}-${ss}`;
-}
-
 function copyAllObjectDirectories(targetPath) {
   const pathError = isValidTargetPath(targetPath);
   if (pathError) {
@@ -169,27 +155,27 @@ function copyAllObjectDirectories(targetPath) {
   }
 
   const objectDirs = getDirectories();
-
   if (objectDirs.length === 0) {
     throw new Error('Brak katalogów obiektów do skopiowania');
   }
 
-  const resolvedTargetBase = path.resolve(targetPath);
-  fs.mkdirSync(resolvedTargetBase, { recursive: true });
-
-  const batchFolderName = `objects-download-${createTimestamp()}`;
-  const finalTargetDir = path.join(resolvedTargetBase, batchFolderName);
-  fs.mkdirSync(finalTargetDir, { recursive: true });
+  const resolvedTargetPath = path.resolve(targetPath);
+  fs.mkdirSync(resolvedTargetPath, { recursive: true });
 
   const copied = [];
 
   for (const id of objectDirs) {
     const sourceDir = getObjectDir(id);
-    const destDir = path.join(finalTargetDir, id);
+    const destDir = path.join(resolvedTargetPath, id);
 
     if (!fs.statSync(sourceDir).isDirectory()) continue;
 
+    if (fileExists(destDir)) {
+      fs.rmSync(destDir, { recursive: true, force: true });
+    }
+
     fs.cpSync(sourceDir, destDir, { recursive: true, force: true });
+
     copied.push({
       id,
       source: sourceDir,
@@ -198,8 +184,7 @@ function copyAllObjectDirectories(targetPath) {
   }
 
   return {
-    targetBasePath: resolvedTargetBase,
-    savedTo: finalTargetDir,
+    targetPath: resolvedTargetPath,
     copiedCount: copied.length,
     copied
   };
@@ -210,11 +195,9 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const id = sanitizeId(req.params.id);
     const objectDir = getObjectDir(id);
-
     if (!objectExists(id)) {
       return cb(new Error('Obiekt nie istnieje'));
     }
-
     cb(null, objectDir);
   },
   filename: (req, file, cb) => {
@@ -224,35 +207,20 @@ const storage = multer.diskStorage({
 
 function fileFilter(req, file, cb) {
   const ext = path.extname(file.originalname).toLowerCase();
-
   if (file.fieldname === 'model' && ext !== '.glb') {
     return cb(new Error('Dozwolony jest tylko plik .glb dla modelu'));
   }
-
   if (file.fieldname === 'preview' && ext !== '.png') {
     return cb(new Error('Dozwolony jest tylko plik .png dla preview'));
   }
-
   cb(null, true);
 }
 
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: 1024 * 1024 * 1024,
-    files: 1,
-    fields: 20
-  }
-});
+const upload = multer({ storage, fileFilter });
 
 // --------------------- Endpoints ---------------------
 app.get('/', (req, res) => {
-  res.json({
-    message: 'CMS backend działa',
-    port: PORT,
-    mode: 'multi-object directories'
-  });
+  res.json({ message: 'CMS backend działa', port: PORT, mode: 'multi-object directories' });
 });
 
 app.get('/ojects', (req, res) => {
@@ -268,11 +236,7 @@ app.get('/object/:id', (req, res) => {
   try {
     const id = sanitizeId(req.params.id);
     const objectData = getObjectSummary(id);
-
-    if (!objectData) {
-      return res.status(404).json({ error: 'Obiekt nie istnieje' });
-    }
-
+    if (!objectData) return res.status(404).json({ error: 'Obiekt nie istnieje' });
     res.json(objectData);
   } catch (error) {
     res.status(500).json({ error: 'Nie udało się pobrać obiektu' });
@@ -283,11 +247,7 @@ app.get('/object/:id/json', (req, res) => {
   try {
     const id = sanitizeId(req.params.id);
     const metadataPath = getMetadataPath(id);
-
-    if (!fileExists(metadataPath)) {
-      return res.status(404).json({ error: 'Brak metadane.json' });
-    }
-
+    if (!fileExists(metadataPath)) return res.status(404).json({ error: 'Brak metadane.json' });
     res.sendFile(metadataPath);
   } catch (error) {
     res.status(500).json({ error: 'Nie udało się pobrać JSON-a' });
@@ -298,16 +258,9 @@ app.get('/object/:id/png', (req, res) => {
   try {
     const id = sanitizeId(req.params.id);
     const objectDir = getObjectDir(id);
-
-    if (!objectExists(id)) {
-      return res.status(404).json({ error: 'Obiekt nie istnieje' });
-    }
-
+    if (!objectExists(id)) return res.status(404).json({ error: 'Obiekt nie istnieje' });
     const pngFile = findSingleFileByExt(objectDir, '.png');
-    if (!pngFile) {
-      return res.status(404).json({ error: 'Brak pliku PNG' });
-    }
-
+    if (!pngFile) return res.status(404).json({ error: 'Brak pliku PNG' });
     res.sendFile(path.join(objectDir, pngFile));
   } catch (error) {
     res.status(500).json({ error: 'Nie udało się pobrać PNG' });
@@ -318,16 +271,9 @@ app.get('/object/:id/glb', (req, res) => {
   try {
     const id = sanitizeId(req.params.id);
     const objectDir = getObjectDir(id);
-
-    if (!objectExists(id)) {
-      return res.status(404).json({ error: 'Obiekt nie istnieje' });
-    }
-
+    if (!objectExists(id)) return res.status(404).json({ error: 'Obiekt nie istnieje' });
     const glbFile = findSingleFileByExt(objectDir, '.glb');
-    if (!glbFile) {
-      return res.status(404).json({ error: 'Brak pliku GLB' });
-    }
-
+    if (!glbFile) return res.status(404).json({ error: 'Brak pliku GLB' });
     res.sendFile(path.join(objectDir, glbFile));
   } catch (error) {
     res.status(500).json({ error: 'Nie udało się pobrać GLB' });
@@ -341,7 +287,7 @@ app.get('/download-objects', (req, res) => {
     const result = copyAllObjectDirectories(targetPath);
 
     res.json({
-      message: 'Wszystkie katalogi obiektów zostały fizycznie zapisane na dysku',
+      message: 'Wszystkie katalogi obiektów zostały zapisane bezpośrednio w targetPath',
       ...result
     });
   } catch (error) {
@@ -357,7 +303,7 @@ app.post('/download-objects', (req, res) => {
     const result = copyAllObjectDirectories(targetPath);
 
     res.json({
-      message: 'Wszystkie katalogi obiektów zostały fizycznie zapisane na dysku',
+      message: 'Wszystkie katalogi obiektów zostały zapisane bezpośrednio w targetPath',
       ...result
     });
   } catch (error) {
@@ -367,32 +313,20 @@ app.post('/download-objects', (req, res) => {
   }
 });
 
-// --------------------- CREATE ---------------------
+// --------------------- CREATE (z pełną walidacją) ---------------------
 app.post('/object', (req, res) => {
   try {
-    const {
-      id,
-      titlePl,
-      titleEn,
-      descriptionPl,
-      descriptionEn,
-      isActive,
-      scale
-    } = req.body;
+    const { id, titlePl, titleEn, descriptionPl, descriptionEn, isActive, scale } = req.body;
 
     const idError = validateObjectId(id);
     if (idError) return res.status(400).json({ error: idError });
 
     if (!titlePl || !titleEn || !descriptionPl || !descriptionEn) {
-      return res.status(400).json({
-        error: 'Wszystkie pola tekstowe (tytuły i opisy) są wymagane'
-      });
+      return res.status(400).json({ error: 'Wszystkie pola tekstowe (tytuły i opisy) są wymagane' });
     }
 
     if (typeof isActive !== 'boolean') {
-      return res.status(400).json({
-        error: 'isActive musi być wartością logiczną (true/false)'
-      });
+      return res.status(400).json({ error: 'isActive musi być wartością logiczną (true/false)' });
     }
 
     const numScale = Number(scale);
@@ -432,11 +366,7 @@ app.post('/object', (req, res) => {
 app.delete('/object/:id', (req, res) => {
   try {
     const id = sanitizeId(req.params.id);
-
-    if (!objectExists(id)) {
-      return res.status(404).json({ error: 'Obiekt nie istnieje' });
-    }
-
+    if (!objectExists(id)) return res.status(404).json({ error: 'Obiekt nie istnieje' });
     fs.rmSync(getObjectDir(id), { recursive: true, force: true });
     res.json({ message: 'Obiekt usunięty', id });
   } catch (error) {
@@ -447,17 +377,11 @@ app.delete('/object/:id', (req, res) => {
 app.put('/object/:id', (req, res) => {
   try {
     const id = sanitizeId(req.params.id);
-
-    if (!objectExists(id)) {
-      return res.status(404).json({ error: 'Obiekt nie istnieje' });
-    }
+    if (!objectExists(id)) return res.status(404).json({ error: 'Obiekt nie istnieje' });
 
     const current = readMetadata(id);
     const updated = { ...current, ...req.body, id };
-
-    updated.isActive =
-      typeof updated.isActive === 'boolean' ? updated.isActive : current.isActive;
-
+    updated.isActive = typeof updated.isActive === 'boolean' ? updated.isActive : current.isActive;
     const parsedScale = Number(updated.scale);
     updated.scale = Number.isFinite(parsedScale) ? parsedScale : current.scale;
 
@@ -472,26 +396,18 @@ app.patch('/object/:id/id', (req, res) => {
   try {
     const oldId = sanitizeId(req.params.id);
     const newId = sanitizeId(req.body.id);
-
     const idError = validateObjectId(newId);
     if (idError) return res.status(400).json({ error: idError });
-
-    if (!objectExists(oldId)) {
-      return res.status(404).json({ error: 'Obiekt nie istnieje' });
-    }
-
+    if (!objectExists(oldId)) return res.status(404).json({ error: 'Obiekt nie istnieje' });
     if (oldId !== newId && objectExists(newId)) {
       return res.status(400).json({ error: 'Nowe ID już istnieje' });
     }
-
     if (oldId !== newId) {
       fs.renameSync(getObjectDir(oldId), getObjectDir(newId));
     }
-
     const data = readMetadata(newId);
     data.id = newId;
     saveMetadata(newId, data);
-
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: 'Nie udało się zmienić ID obiektu' });
@@ -499,33 +415,25 @@ app.patch('/object/:id/id', (req, res) => {
 });
 
 app.patch('/object/:id/title-pl', (req, res) => {
-  try {
-    res.json(updateField(req.params.id, 'titlePl', req.body.titlePl));
-  } catch (error) {
+  try { res.json(updateField(req.params.id, 'titlePl', req.body.titlePl)); } catch (error) {
     res.status(500).json({ error: 'Nie udało się zmienić titlePl' });
   }
 });
 
 app.patch('/object/:id/title-en', (req, res) => {
-  try {
-    res.json(updateField(req.params.id, 'titleEn', req.body.titleEn));
-  } catch (error) {
+  try { res.json(updateField(req.params.id, 'titleEn', req.body.titleEn)); } catch (error) {
     res.status(500).json({ error: 'Nie udało się zmienić titleEn' });
   }
 });
 
 app.patch('/object/:id/description-pl', (req, res) => {
-  try {
-    res.json(updateField(req.params.id, 'descriptionPl', req.body.descriptionPl));
-  } catch (error) {
+  try { res.json(updateField(req.params.id, 'descriptionPl', req.body.descriptionPl)); } catch (error) {
     res.status(500).json({ error: 'Nie udało się zmienić descriptionPl' });
   }
 });
 
 app.patch('/object/:id/description-en', (req, res) => {
-  try {
-    res.json(updateField(req.params.id, 'descriptionEn', req.body.descriptionEn));
-  } catch (error) {
+  try { res.json(updateField(req.params.id, 'descriptionEn', req.body.descriptionEn)); } catch (error) {
     res.status(500).json({ error: 'Nie udało się zmienić descriptionEn' });
   }
 });
@@ -542,10 +450,7 @@ app.patch('/object/:id/is-active', (req, res) => {
 app.patch('/object/:id/scale', (req, res) => {
   try {
     const scale = Number(req.body.scale);
-    if (!Number.isFinite(scale)) {
-      return res.status(400).json({ error: 'scale musi być liczbą' });
-    }
-
+    if (!Number.isFinite(scale)) return res.status(400).json({ error: 'scale musi być liczbą' });
     res.json(updateField(req.params.id, 'scale', scale));
   } catch (error) {
     res.status(500).json({ error: 'Nie udało się zmienić scale' });
@@ -556,10 +461,7 @@ app.patch('/object/:id/scale', (req, res) => {
 app.post('/object/:id/upload/model', upload.single('model'), (req, res) => {
   try {
     const id = sanitizeId(req.params.id);
-
-    if (!req.file) {
-      return res.status(400).json({ error: 'Brak pliku modelu' });
-    }
+    if (!req.file) return res.status(400).json({ error: 'Brak pliku modelu' });
 
     removeOldFilesByExt(id, '.glb', req.file.originalname);
 
@@ -567,11 +469,7 @@ app.post('/object/:id/upload/model', upload.single('model'), (req, res) => {
     data.model = req.file.originalname;
     saveMetadata(id, data);
 
-    res.json({
-      message: 'Model został wgrany',
-      file: req.file.originalname,
-      metadata: data
-    });
+    res.json({ message: 'Model został wgrany', file: req.file.originalname, metadata: data });
   } catch (error) {
     res.status(500).json({ error: 'Nie udało się wgrać modelu' });
   }
@@ -580,10 +478,7 @@ app.post('/object/:id/upload/model', upload.single('model'), (req, res) => {
 app.post('/object/:id/upload/preview', upload.single('preview'), (req, res) => {
   try {
     const id = sanitizeId(req.params.id);
-
-    if (!req.file) {
-      return res.status(400).json({ error: 'Brak pliku preview' });
-    }
+    if (!req.file) return res.status(400).json({ error: 'Brak pliku preview' });
 
     removeOldFilesByExt(id, '.png', req.file.originalname);
 
@@ -591,11 +486,7 @@ app.post('/object/:id/upload/preview', upload.single('preview'), (req, res) => {
     data.preview = req.file.originalname;
     saveMetadata(id, data);
 
-    res.json({
-      message: 'Preview został wgrany',
-      file: req.file.originalname,
-      metadata: data
-    });
+    res.json({ message: 'Preview został wgrany', file: req.file.originalname, metadata: data });
   } catch (error) {
     res.status(500).json({ error: 'Nie udało się wgrać preview' });
   }
@@ -609,19 +500,14 @@ app.use((error, req, res, next) => {
 // --------------------- Start ---------------------
 app.listen(PORT, HOST, () => {
   const ips = getLocalIPs();
-
   console.log('\n===== CMS BACKEND START =====');
   console.log(`Backend działa na: http://localhost:${PORT}`);
-
   if (ips.length > 0) {
     console.log('\nAdresy IP serwera:');
-    ips.forEach((item) =>
-      console.log(`- ${item.interface}: http://${item.address}:${PORT}`)
-    );
+    ips.forEach((item) => console.log(`- ${item.interface}: http://${item.address}:${PORT}`));
   } else {
     console.log('\nNie znaleziono zewnętrznego adresu IPv4.');
   }
-
   console.log('\nEndpointy:');
   console.log(`GET    /`);
   console.log(`GET    /ojects`);
